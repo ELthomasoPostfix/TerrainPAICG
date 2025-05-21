@@ -1,0 +1,8 @@
+name = "GeneralNoise"
+uuid = "83f027b5-12e7-455e-a526-9054addacb05"
+authors = ["Thomas Gueutal"]
+version = "0.1.0"
+
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"

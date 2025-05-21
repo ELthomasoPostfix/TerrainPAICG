@@ -8,3 +8,15 @@ This project blends different technologies for the sake of it, for the joy uniqu
 Thus, the project structure is as follows.
 1. A C library of basic PCG techniques and utilities for image generation.
 2. A Julia module that trains image-based AI models from PCG-generated datasets, by invoking the C library.
+
+## Manual Testing
+
+To manually execute the tests associated with a Julia module, use Julia's REPL.
+
+```sh
+$ cd GeneralNoise
+$ julia
+julia> ]
+pkg> activate .
+(GeneralNoise) pkg> test
+```

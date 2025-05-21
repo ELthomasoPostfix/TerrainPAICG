@@ -30,3 +30,6 @@
 *.exe
 *.out
 *.app
+
+# Julia module manifest files.
+*Manifest.toml

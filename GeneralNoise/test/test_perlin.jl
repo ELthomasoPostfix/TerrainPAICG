@@ -59,23 +59,13 @@
     end
 
     @testset "x = 2^n" begin
-        @test ! ispow2(0)
-        @test   ispow2(1) # 2^0
-        @test   ispow2(2) # 2^1
-        @test ! ispow2(3)
-        @test   ispow2(4) # 2^2
-        @test ! ispow2(5)
-        @test ! ispow2(6)
-        @test ! ispow2(7)
-        @test   ispow2(8) # 2^3
-        @test ! ispow2(9)
-        @test ! ispow2(12)
-        @test ! ispow2(15)
-        @test   ispow2(16) # 2^4
-        @test ! ispow2(17)
-        @test ! ispow2(463)
-        @test ! ispow2(1023)
-        @test   ispow2(1024) # 2^10
+        powers_of_2 = [ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 ]
+        exponent = length(powers_of_2) - 1
+        @test all(
+            # The value is a power of two iff. it is also in the list.
+            f -> (f in powers_of_2) == ispow2(f),
+            [ x for x in 0:(2^exponent) ]
+        )
     end
 end
 

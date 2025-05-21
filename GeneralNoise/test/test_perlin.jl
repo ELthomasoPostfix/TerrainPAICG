@@ -1,20 +1,82 @@
 # Utils that do NOT require a noise map argument.
 @testset "Utils" begin
-    lists = [[2,3],[1,2],[3,4]]
-    cartprod = Iterators.product(lists...)
-    cartprod = reduce(vcat, cartprod) # Reduce the matrix to a vector.
-    # If the product input is sorted, then the product output may be sorted.
-    @test all(issorted(lst) for lst in lists)
-    # Test that `Iterators.product` outputs tuples in an expected ordering.
-    @test cartprod == [
-        (2, 1, 3), (3, 1, 3), (2, 2, 3), (3, 2, 3),
-        (2, 1, 4), (3, 1, 4), (2, 2, 4), (3, 2, 4)
-    ]
-    # That expected ordering must be a sorted ordering.
-    # Given tuples (a, b, c) we expect them to be sorted by priority c > b > a.
-    # So, if two tuples have the same c, then sort them by b. If they have the
-    # same c and b, then sort them by a.
-    @test issorted(cartprod, by=reverse)
+    @testset "Cartesian Product Ordering" begin
+        lists = [[2,3],[1,2],[3,4]]
+        cartprod = Iterators.product(lists...)
+        cartprod = reduce(vcat, cartprod) # Reduce the matrix to a vector.
+        # If the product input is sorted, then the product output may be sorted.
+        @test all(issorted(lst) for lst in lists)
+        # Test that `Iterators.product` outputs tuples in an expected ordering.
+        @test cartprod == [
+            (2, 1, 3), (3, 1, 3), (2, 2, 3), (3, 2, 3),
+            (2, 1, 4), (3, 1, 4), (2, 2, 4), (3, 2, 4)
+        ]
+        # That expected ordering must be a sorted ordering.
+        # Given tuples (a, b, c) we expect them to be sorted by priority c > b > a.
+        # So, if two tuples have the same c, then sort them by b. If they have the
+        # same c and b, then sort them by a.
+        @test issorted(cartprod, by=reverse)
+
+        # Ensure the utils function produces the same result as tested above.
+        @test cartprod == GeneralNoise.corners((2, 1, 3))
+    end
+
+    @testset "Linear Interpolation" begin
+        a = -2.0
+        b = +5.0
+        # Test out points.
+        @test_throws AssertionError GeneralNoise.lerp(0.0 - 1e-10, a, b)
+        @test_throws AssertionError GeneralNoise.lerp(1.0 + 1e-10, a, b)
+        # Test boundary points.
+        @test GeneralNoise.lerp(0.0, a, b) == a
+        @test GeneralNoise.lerp(1.0, a, b) == b
+        # Test in points.
+        @test isapprox(GeneralNoise.lerp(0.1, a, b), -1.3, atol=1e-4)
+        @test isapprox(GeneralNoise.lerp(0.3, a, b), +0.1, atol=1e-4)
+        @test isapprox(GeneralNoise.lerp(0.5, a, b), +1.5, atol=1e-4)
+        @test isapprox(GeneralNoise.lerp(0.7, a, b), +2.9, atol=1e-4)
+        @test isapprox(GeneralNoise.lerp(0.9, a, b), +4.3, atol=1e-4)
+        # Test the range output range thoroughly, it must be [a, b].
+        @test all(f -> a <= f <= b , [ GeneralNoise.lerp(x, a, b) for x in 0:0.01:1 ])
+    end
+
+    @testset "Smoothstep Smoothing" begin
+        # Test out points.
+        @test_throws AssertionError GeneralNoise.smoothstep(0.0 - 1e-10)
+        @test_throws AssertionError GeneralNoise.smoothstep(1.0 + 1e-10)
+        # Test boundary points.
+        @test GeneralNoise.smoothstep(0.0) == 0.0
+        @test GeneralNoise.smoothstep(1.0) == 1.0
+        # Test in points.
+        @test isapprox(GeneralNoise.smoothstep(0.1), 0.028, atol=1e-4)
+        @test isapprox(GeneralNoise.smoothstep(0.3), 0.216, atol=1e-4)
+        # Require exact equality for x=0.5. We may rely on this in other tests.
+        @test GeneralNoise.smoothstep(0.5) == 0.5
+        @test isapprox(GeneralNoise.smoothstep(0.7), 0.784, atol=1e-4)
+        @test isapprox(GeneralNoise.smoothstep(0.9), 0.972, atol=1e-4)
+        # Test the range output range thoroughly, it must be [0, 1].
+        @test all(f -> 0.0 <= f <= 1.0 , [ GeneralNoise.smoothstep(x) for x in 0:0.01:1 ])
+    end
+
+    @testset "x = 2^n" begin
+        @test ! ispow2(0)
+        @test   ispow2(1) # 2^0
+        @test   ispow2(2) # 2^1
+        @test ! ispow2(3)
+        @test   ispow2(4) # 2^2
+        @test ! ispow2(5)
+        @test ! ispow2(6)
+        @test ! ispow2(7)
+        @test   ispow2(8) # 2^3
+        @test ! ispow2(9)
+        @test ! ispow2(12)
+        @test ! ispow2(15)
+        @test   ispow2(16) # 2^4
+        @test ! ispow2(17)
+        @test ! ispow2(463)
+        @test ! ispow2(1023)
+        @test   ispow2(1024) # 2^10
+    end
 end
 
 # Test constructor functions.

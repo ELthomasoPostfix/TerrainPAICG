@@ -1,0 +1,16 @@
+name = "TerrainPAICG"
+uuid = "6559dd69-a809-4276-a002-4c4c911b28a1"
+authors = ["Thomas Gueutal"]
+version = "0.1.0"
+
+[deps]
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+GeneralNoise = "83f027b5-12e7-455e-a526-9054addacb05"
+
+[sources]
+GeneralNoise = {path = "GeneralNoise"}
+
+[compat]
+Pkg = "1.11.0"
+Test = "1.11.0"

@@ -1,5 +1,5 @@
-include("src/GeneralNoise.jl")
-using .GeneralNoise
+include("TerrainPAICG.jl")
+using .TerrainPAICG
 
 # Prevent flaky tests by setting an RNG seed.
 using Random

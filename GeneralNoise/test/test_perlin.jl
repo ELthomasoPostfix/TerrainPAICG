@@ -57,29 +57,17 @@
         # Test the range output range thoroughly, it must be [0, 1].
         @test all(f -> 0.0 <= f <= 1.0 , [ GeneralNoise.smoothstep(x) for x in 0:0.01:1 ])
     end
-
-    @testset "x = 2^n" begin
-        powers_of_2 = [ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 ]
-        exponent = length(powers_of_2) - 1
-        @test all(
-            # The value is a power of two iff. it is also in the list.
-            f -> (f in powers_of_2) == ispow2(f),
-            [ x for x in 0:(2^exponent) ]
-        )
-    end
 end
 
 # Test constructor functions.
 @testset "Constructors" begin
     # Test against invalid map dimensions..
     @test_throws AssertionError PerlinNoiseMap{0,Float64}(())
-    @test_throws AssertionError PerlinNoiseMap{1,Float64}((1,))
     @test_throws AssertionError PerlinNoiseMap{Float64}(())
-    @test_throws AssertionError PerlinNoiseMap{Float64}((1,))
 
     # The happy day constructor scenario.
     @testset "Happy Day" begin
-        for dim in 2:4
+        for dim in 1:4
             # Try creating a map with as few gridcells as possible.
             celldims = Tuple(fill(1, dim))  # (1, ..., 1)
             graddims = celldims .+ 1        # (2, ..., 2)
@@ -107,29 +95,54 @@ end
 
 # Utils that DO require a noise map argument.
 @testset "Map Utils" begin
-    map = PerlinNoiseMap{Float64}((1, 4, 3))
+    @testset "2D basic map utils" begin
+        map = PerlinNoiseMap{Float64}((5, 1))
 
-    @test GeneralNoise.dims(map) == (2, 5, 4)
-    @test GeneralNoise.gridmax(map) == (1, 4, 3)
+        # Test utils that depend on the dimensionality of the map.
+        @test GeneralNoise.dim(map) == 2
+        @test GeneralNoise.dims(map) == (6, 2)
+        @test GeneralNoise.gridmax(map) == (5, 1)
+        @test isapprox(GeneralNoise.ran(map), sqrt(2)/2.0, atol=1e-10)
+    end
 
-    # Every map contains at least one gridcell, so (0, 0, 0) is always in bounds.
-    @test GeneralNoise.inbounds(map, (0, 0, 0))
-    # Test the largest possible in bounds cell.
-    @test GeneralNoise.inbounds(map, (0, 3, 2))
-    # Test different ways to go out of bounds of the noise map.
-    @test !GeneralNoise.inbounds(map, (-1, 0, 0))
-    @test !GeneralNoise.inbounds(map, (1, 0, 0))
-    @test !GeneralNoise.inbounds(map, (0, 4, 0))
-    @test !GeneralNoise.inbounds(map, (0, 0, 3))
+    @testset "3D map utils" begin
+        map = PerlinNoiseMap{Float64}((1, 4, 3))
 
-    # Try to get the gridcell indices matching sample points.
-    @test GeneralNoise.gridcell(map, (0.0, 0.0, 0.0)) == (0, 0, 0)
-    @test GeneralNoise.gridcell(map, (0.9, 3.9, 2.9)) == (0, 3, 2)
-    @test GeneralNoise.gridcell(map, (0.9999, 3.9999, 2.9999)) == (0, 3, 2)
-    @test GeneralNoise.gridcell(map, (1.0, 4.0, 3.0)) == (0, 3, 2)
-    @test_throws AssertionError GeneralNoise.gridcell(map, (1.1, 4.1, 3.1))
-    @test_throws AssertionError GeneralNoise.gridcell(map, (1.0001, 4.0001, 3.0001))
-    @test_throws AssertionError GeneralNoise.gridcell(map, (0.0, -0.1, 0.0))
+        # Test utils that depend on the dimensionality of the map.
+        @test GeneralNoise.dim(map) == 3
+        @test GeneralNoise.dims(map) == (2, 5, 4)
+        @test GeneralNoise.gridmax(map) == (1, 4, 3)
+        @test isapprox(GeneralNoise.ran(map), sqrt(3)/2.0, atol=1e-10)
+
+        # Every map contains at least one gridcell, so (0, 0, 0) is always in bounds.
+        @test GeneralNoise.inbounds(map, (0, 0, 0))
+        # Test the largest possible in bounds cell.
+        @test GeneralNoise.inbounds(map, (0, 3, 2))
+        # Test different ways to go out of bounds of the noise map.
+        @test !GeneralNoise.inbounds(map, (-1, 0, 0))
+        @test !GeneralNoise.inbounds(map, (1, 0, 0))
+        @test !GeneralNoise.inbounds(map, (0, 4, 0))
+        @test !GeneralNoise.inbounds(map, (0, 0, 3))
+
+        # Try to get the gridcell indices matching sample points.
+        @test GeneralNoise.gridcell(map, (0.0, 0.0, 0.0)) == (0, 0, 0)
+        @test GeneralNoise.gridcell(map, (0.9, 3.9, 2.9)) == (0, 3, 2)
+        @test GeneralNoise.gridcell(map, (0.9999, 3.9999, 2.9999)) == (0, 3, 2)
+        @test GeneralNoise.gridcell(map, (1.0, 4.0, 3.0)) == (0, 3, 2)
+        @test_throws AssertionError GeneralNoise.gridcell(map, (1.1, 4.1, 3.1))
+        @test_throws AssertionError GeneralNoise.gridcell(map, (1.0001, 4.0001, 3.0001))
+        @test_throws AssertionError GeneralNoise.gridcell(map, (0.0, -0.1, 0.0))
+    end
+end
+
+# Verify the pre- and post-conditions of the noise functions.
+@testset "Noise Pre/Post conditions" begin
+    map = PerlinNoiseMap{Float64}((5, 1))
+
+    # Validate the pre-conditions.
+    @test_throws AssertionError noise(map, (NaN, 1.0))
+    @test_throws AssertionError noise(map, (1.0, NaN))
+    @test_throws AssertionError noise(map, (NaN, NaN))
 end
 
 # Verify that the bounds of the noise range are as expected.
@@ -138,6 +151,32 @@ end
 # Given a n-dimensional noise map, all noise perlin values are naturally
 # bounded in the range [-sqrt(n)/2, sqrt(n)/2].
 @testset "Noise Range Bounds" begin
+    @testset "1x map max noise" begin
+        # Create a 1D grid with one single, square gridcell.
+        map = PerlinNoiseMap{Float64}((1,))
+
+        # All gradient vectors are length 1 and point in opposite direcions.
+        map.gradients[1] = Tuple([+1]) # left  corner
+        map.gradients[2] = Tuple([-1]) # right corner
+        result = noise(map, (0.5,), normalize=false)
+        actual = + (sqrt(1) / 2)
+        # This gradient + sample point configuration produces the HIGHEST possible noise.
+        @test isapprox(result, actual, atol=1e-10)
+    end
+
+    @testset "1x map min noise" begin
+        # Create a 1D grid with one single, square gridcell.
+        map = PerlinNoiseMap{Float64}((1,))
+
+        # All gradient vectors are length 1 and point in opposite direcions.
+        map.gradients[1] = Tuple([-1]) # left  corner
+        map.gradients[2] = Tuple([+1]) # right corner
+        result = noise(map, (0.5,), normalize=false)
+        actual = - (sqrt(1) / 2)
+        # This gradient + sample point configuration produces the LOWEST possible noise.
+        @test isapprox(result, actual, atol=1e-10)
+    end
+
     @testset "1x1 map max noise" begin
         # Create a 2D grid with one single, square gridcell.
         map = PerlinNoiseMap{Float64}((1, 1))
@@ -147,7 +186,7 @@ end
         map.gradients[2,1] = Tuple(normalize([-1, +1])) # bottom right corner
         map.gradients[1,2] = Tuple(normalize([+1, -1])) # top    left  corner
         map.gradients[2,2] = Tuple(normalize([-1, -1])) # top    right corner
-        result = noise(map, (0.5, 0.5))
+        result = noise(map, (0.5, 0.5), normalize=false)
         actual = + (sqrt(2) / 2)
         # This gradient + sample point configuration produces the HIGHEST possible noise.
         @test isapprox(result, actual, atol=1e-10)
@@ -162,7 +201,7 @@ end
         map.gradients[2,1] = Tuple(normalize([+1, -1])) # bottom right corner
         map.gradients[1,2] = Tuple(normalize([-1, +1])) # top    left  corner
         map.gradients[2,2] = Tuple(normalize([+1, +1])) # top    right corner
-        result = noise(map, (0.5, 0.5))
+        result = noise(map, (0.5, 0.5), normalize=false)
         actual = - (sqrt(2) / 2)
         # This gradient + sample point configuration produces the LOWEST possible noise.
         @test isapprox(result, actual, atol=1e-10)
@@ -181,7 +220,7 @@ end
         map.gradients[2,1,2] = Tuple(normalize([-1, +1, -1]))
         map.gradients[1,2,2] = Tuple(normalize([+1, -1, -1]))
         map.gradients[2,2,2] = Tuple(normalize([-1, -1, -1]))
-        result = noise(map, (0.5, 0.5, 0.5))
+        result = noise(map, (0.5, 0.5, 0.5), normalize=false)
         actual = + (sqrt(3) / 2)
         # This gradient + sample point configuration produces the HIGHEST possible noise.
         @test isapprox(result, actual, atol=1e-10)
@@ -200,7 +239,7 @@ end
         map.gradients[2,1,2] = Tuple(normalize([+1, -1, +1]))
         map.gradients[1,2,2] = Tuple(normalize([-1, +1, +1]))
         map.gradients[2,2,2] = Tuple(normalize([+1, +1, +1]))
-        result = noise(map, (0.5, 0.5, 0.5))
+        result = noise(map, (0.5, 0.5, 0.5), normalize=false)
         actual = - (sqrt(3) / 2)
         # This gradient + sample point configuration produces the LOWEST possible noise.
         @test isapprox(result, actual, atol=1e-10)

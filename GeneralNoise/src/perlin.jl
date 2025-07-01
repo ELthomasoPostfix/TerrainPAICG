@@ -1,12 +1,10 @@
-"""An N-dimensional perlin noise map.
+"""An N-dimensional lattice to facilitate sampling N-dimensional Perlin noise.
 
-A 2D noise map of dimensions nxm contains all grid points in the cartesian product
-`(0:1:n) x (0:1:m)`.
-
-    (0, 0)  (1, 0)  ...  (n, 0)
-    (0, 1)  (1, 1)  ...  (n, 1)
-    ...     ...     ...  ...
-    (0, m)  (1, m)  ...  (n, m)
+The map represents a fixed-size N-dimensional lattice of gradient vectors.
+That is, at creation you specify how many gridcells each dimension contains,
+and then gradient vectors are sampled immediately for all possible gridpoints.
+For example, a 3x4x2 grid has three dimensions and in total 3*4*2=24 gridpoints,
+so 24 gradient vectors are sampled.
 """
 struct PerlinNoiseMap{N, T<:Number}
     """The N-dimensional gradient vector map."""
@@ -14,11 +12,11 @@ struct PerlinNoiseMap{N, T<:Number}
 
     """PerlinNoiseMap inner constructor.
 
-    @param[in] cells The number of grid cells in each dimension.
+    @param[in] cells The number of grid cells (hypercubes) in each dimension.
     """
     function PerlinNoiseMap{N, T}(cells :: NTuple{N, I}) where {N, T<:Number, I<:Integer}
 
-        @assert N > 1 "The noise map must be at least 2-dimensional."
+        @assert N > 0 "The noise map must be at least 1-dimensional."
         @assert all( cells .> 0 ) "Require 1 or more gridcells in each dimension."
 
         # Each corner of a grid cell needs an associated gradient vector.
@@ -26,8 +24,13 @@ struct PerlinNoiseMap{N, T<:Number}
         gradients = Array{NTuple{N, T}, N}(undef, cells .+ 1)
         # Generate unit gradient vectors for each gridpoint.
         for idx in eachindex(gradients)
+            # A 1D gradient varies in [-1, 1], it is not normalized to 1 or -1.
+            if N == 1
+                gradients[idx] = Tuple(rand(-1:0.01:1, N))
             # Normalization is strictly required for vectors of > 1 dimensions.
-            gradients[idx] = Tuple(normalize(rand(-1:0.01:1, N)))
+            else
+                gradients[idx] = Tuple(normalize(rand(-1:0.01:1, N)))
+            end
         end
 
         return new{N, T}(gradients)
@@ -41,9 +44,13 @@ function PerlinNoiseMap{T}(cells :: NTuple{N, I}) where {N, T<:Number, I}
 end
 
 """Determine the number of gradients in each dimension."""
-function dims(map::PerlinNoiseMap{N, T}) where {N, T}
-    return size(map.gradients)
-end
+dims(map::PerlinNoiseMap{N, T}) where {N, T} = size(map.gradients)
+
+"""Determine the dimensionality of the map."""
+dim(map::PerlinNoiseMap{N, T}) where {N, T} = return length(dims(map))
+
+"""Compute the absolute range bound of N-dimensional Perlin noise: sqrt(N)/2."""
+ran(map::PerlinNoiseMap{N, T}) where {N, T} = return sqrt(dim(map)) / 2.0
 
 """Compute the maximum coordinate inbound the grid for each dimension."""
 function gridmax(map::PerlinNoiseMap{N, T}) where {N, T}
@@ -76,9 +83,7 @@ function gridcell(map::PerlinNoiseMap{N, T}, point::NTuple{N, T}) where {N, T}
 end
 
 """Compute the indices of the corners of the gridcell."""
-function corners(cell::NTuple{N, Integer}) where {N, T}
-    # Given the cell indexes, the corresponding gradients are found at
-    # index and index+1 of the gradient map of each dimension.
+function corners(cell::NTuple{N, Integer}) where {N}
     return reduce(vcat, Iterators.product([
         [cellidx, cellidx+1] for cellidx in cell
     ]...))
@@ -86,18 +91,15 @@ end
 
 """The smoothstep sigmoid-like smoothing function.
 
-@param[in] x The value to smooth.
+@pre The input must be in [0, 1].
 @return A smoothed value in [0, 1].
 """
 function smoothstep(x::T) where {T<:Number}
-    @assert 0.0 <= x <= 1.0 "$x in [0, 1] does not hold."
+    @assert 0.0 <= x <= 1.0 "x = $x in [0, 1] does not hold."
     # Perform sigmoid-like smoothing: 3(x^2) - 2(x^3) = (3 - 2x) * x^2
-    return (3 - 2*x) * x^2
-end
-
-"""Check if x = 2^n for any n = 0, 1, ... holds."""
-function ispow2(x::Integer)
-    return (x & (x - 1)) == 0
+    s = (3 - 2*x) * x^2
+    @assert 0.0 <= s <= 1.0 "s = $s in [0, 1] does not hold."
+    return s
 end
 
 """Linearly interpolate between a and b."""
@@ -106,41 +108,47 @@ function lerp(frac::T, a::T, b::T) where {T}
     return a + frac*(b - a)
 end
 
-"""Obtain the noise value for the given point in space."""
-function noise(map::PerlinNoiseMap{N, T}, samplepoint::NTuple{N, T}) where {N,T}
-    # Determine which grid cell the space point falls in.
+"""Obtain the noise value for the given point in space.
+
+@param[in] normalize
+    If true, then output a noise value in [-1, 1].
+    If false, then output a noise value in [-sqrt(N)/2, sqrt(N)/2].
+    Due to rounding errors, the noise may slightly fall outside the ranges.
+"""
+function noise(map::PerlinNoiseMap{N, T}, samplepoint::NTuple{N, T}; normalize::Bool=true) where {N,T}
+    # Verify preconditions.
+    @assert all(@. !isnan(samplepoint)) "The sample contains NaN values: $samplepoint."
+
+    # Determine which grid cell the sample point falls in.
     cell::NTuple{N, Integer} = gridcell(map, samplepoint)
 
-    # Obtain one noise value for each gridpoint.
-    # FIXME: The noise values are not in the range [-1, 1]???
-    #        Determine the proper noise values, so that lerped it is in [-1, 1].
+    # Obtain one noise value for each hypercube corner.
     # Note: Julia is 1-indexed, so increment EVERY gradient corner index.
     noise::Vector{T} = [
         dot(map.gradients[(corner .+ 1)...], samplepoint .- corner)
-        # FIXME: Julia has 1-indexed matrices.
         for corner in corners(cell)
     ]
 
     # Linearly interpolate the noise value sequence.
     # The i-th iteration lerps the i-th dimension.
-    # Each iteration halves the length of the sequence.
     for dim in 1:N
-        # The lerp sequence must be of length 2^n.
-        @assert ispow2(length(noise))
+        # Each iteration halves the length of the sequence.
+        @assert length(noise) == 2^(N-dim+1)
 
-        # The projection of the sample point onto the x-axis is fraction t
-        # along the line segment going from corner c_1 to corner c_2.
-        t = samplepoint[dim] - cell[dim]
-        # Make the linear interpolation sigmoid-like.
-        t = smoothstep(t)
+        # Determine the inerpolation fraction along the current dimension.
+        # Make the linear interpolation sigmoid-like using smootstep.
+        t = smoothstep(samplepoint[dim] - cell[dim])
 
+        # Compute all interpolations along the current dimension.
         noise = [
             lerp(t, noise[i], noise[i+1])
             for i in 1:2:length(noise)
         ]
     end
 
-    # Finally, extract the lerped noise value.
-    @assert length(noise) == 1
-    return noise[1]
+    # Finally, extract the final, lerped noise value.
+    @assert length(noise) == 1 "Lerping failed, too many noise values remain."
+    # Assert the theoretical bounds of all generated noise values.
+    @assert abs(noise[1]) <= ran(map)+1e-6 "Noise ($(noise[1])) not in valid range."
+    return normalize ? noise[1] / ran(map) : noise[1]
 end

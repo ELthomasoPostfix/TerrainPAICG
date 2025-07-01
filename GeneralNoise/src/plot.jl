@@ -6,8 +6,8 @@ end
 
 """Generate a quiver (vector field) plot of the noise map."""
 function quiver!(plt, map::PerlinNoiseMap{N, T}) where {N,T}
-    dimensions = length(dims(map))
-    @assert 2 <= dimensions <= 3 "Can only plot 2D or 3D noise maps."
+    dimensions = dim(map)
+    @assert 1 <= dimensions <= 2 "Can only plot 1D or 2D noise maps."
 
     tails::Vector{Vector{T}} = [ [] for _ in 1:dimensions ]
     deltas::Vector{Vector{T}} = [ [] for _ in 1:dimensions ]
@@ -27,18 +27,46 @@ function quiver!(plt, map::PerlinNoiseMap{N, T}) where {N,T}
             # Scale the gradients to avoid cluttering the plot.
             gradscalar::Float64 = 1 / 5
             push!(deltas[dim], gradient[dim] * gradscalar)
-
         end
+    end
+
+    # For a 1D map, fix the y-coordinates of all gradient tails to zero.
+    if dimensions == 1
+        push!(tails, zero(tails[1]))
+        pushfirst!(deltas, zero(deltas[1]))
     end
 
     Plots.quiver!(plt, tails..., quiver=Tuple(deltas), arrow=(:closed,:head,2.0,2.0))
 end
 
+"""Generate a noise curve plot of the noise map."""
+function image1d(map::PerlinNoiseMap{N, T}, width::Integer;
+        pscatter::Bool=false, pquiver::Bool=false) where {N,T}
+    dimensions = dim(map)
+    @assert dimensions == 1 "Can only plot 1D noise maps."
+    @assert width >= 1 "The width must be at least 1."
+
+    xmax, = gridmax(map)
+    samples::Vector{Tuple{Float64, Float64}} = []
+    for x in 1:width
+        sample = (x - 1) / width * xmax
+        pnoise = noise(map, (sample,))
+        push!(samples, (sample, pnoise))
+    end
+    p = plot(samples, color = :greys)
+    if pscatter begin scatter!(p, samples, markersize=1) end end
+    if pquiver begin quiver!(p, map) end end
+    plot!(p, yticks=[-1, 0, 1], ylims=(-1,1))
+
+    return p
+end
+
 """Generate a heatmap plot of the noise map."""
 function image2d(map::PerlinNoiseMap{N, T}, width::Integer, height::Integer;
         pscatter::Bool=false, pquiver::Bool=false) where {N,T}
-    dimensions = length(dims(map))
+    dimensions = dim(map)
     @assert dimensions == 2 "Can only plot 2D noise maps."
+    @assert width >= 1 && height >= 1 "The dimensions must be at least 1x1."
 
     xmax, ymax = gridmax(map)
     image = Array{Float64, 2}(undef, width, height)
@@ -46,15 +74,15 @@ function image2d(map::PerlinNoiseMap{N, T}, width::Integer, height::Integer;
     for x in 1:width
         for y in 1:height
             sample = (
-                (x - 1) / (width - 1) * xmax,
-                (y - 1) / (height - 1) * ymax
+                (x - 1) / width * xmax,
+                (y - 1) / height * ymax
             )
             push!(samples, sample)
             image[x,y] = noise(map, sample)
         end
     end
-    xticks = (0:width-1)/(width - 1) * gridmax(map)[1]
-    yticks = (0:height-1)/(height - 1) * gridmax(map)[2]
+    xticks = (0:width-1) / width * xmax
+    yticks = (0:height-1) / height * ymax
     p = heatmap(xticks, yticks, image, color = :greys)
     if pscatter begin scatter!(p, samples, markersize=1) end end
     if pquiver begin quiver!(p, map) end end

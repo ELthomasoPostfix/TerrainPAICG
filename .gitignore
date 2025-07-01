@@ -1,3 +1,10 @@
+# Artefacts must be forced into commmits.
+*.png
+*.svg
+*.mp4
+*.gif
+*.webm
+
 # Prerequisites
 *.d
 

@@ -8,5 +8,5 @@ module GeneralNoise
     include("plot.jl")
 
     export PerlinNoiseMap, noise
-    export image2d
+    export image1d, image2d
 end
